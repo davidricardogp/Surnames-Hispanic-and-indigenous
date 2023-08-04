@@ -1,0 +1,289 @@
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+////////////////////////////// Primera parte //////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// Limpieza de apellidos en base original y conteo de nombres obtenidos.
+
+
+cd  "/Users/davidricardogonzales/Library/CloudStorage/OneDrive-UDEP/MAC"
+
+use listado_apellidos.dta, clear
+
+// genero un id para posterior comparación y agrupación
+
+gen id = _n
+
+/*
+// Limpieza
+
+Para la limpieza eliminamos puntuaciones, símbolos, artículos y conjunciones.
+También se realizaron algunas correcciones de lo que fueron tratos como typos.
+*/
+
+replace apellido = "RIMACHI" if apellido == "RIMACHI."
+
+gen apell = ustrregexra(apellido, "\b[a-zA-Z]+\.", "")
+
+replace apell = ustrregexra(apell, "^Y[ ]", "")
+replace apell = ustrregexra(apell, "DE[ ]", "")
+replace apell = ustrregexra(apell, "LA[ ]", "")
+replace apell = ustrregexra(apell, "LAS[ ]", "")
+replace apell = ustrregexra(apell, "[ ]VDA[ ]", " ")
+replace apell = ustrregexra(apell, "-", " ")
+replace apell = ustrregexra(apell, "[ ]Y$", "")
+replace apell = ustrregexra(apell, "^DA[ ]", "")
+replace apell = ustrregexra(apell, "^I[ ]", "")
+replace apell = ustrregexra(apell, "[ ]DE$", "")
+replace apell = ustrregexra(apell, "[ ]LOS[ ]", " ")
+replace apell = ustrregexra(apell, "^A[ ]", "")
+replace apell = ustrregexra(apell, "[ ]I[ ]", " ")
+replace apell = ustrregexra(apell, "^I[ ]", " ")
+replace apell = "MALDONADO" if apell == "M ALDONADO"
+replace apell = ustrregexra(apell, "^VDA[ ]", "")
+replace apell = ustrregexra(apell, "^DEL[ ]", "")
+replace apell = ustrregexra(apell, "[ ]DEL[ ]", " ")
+replace apell = ustrregexra(apell, "[ ]Y[ ]", " ")
+replace apell = ustrregexra(apell, "^D'[ ]", "")
+replace apell = ustrregexra(apell, "^S[ ]", "")
+replace apell = "K'ACHA" in 39407
+replace apell = ustrregexra(apell, "^.[ ]", "")
+replace apell = ustrregexra(apell, "[ ].$", "")
+replace apell = ustrregexra(apell, "^LE[ ]", "")
+replace apell = ustrregexra(apell, "^DO[ ]", "")
+replace apell = ustrregexra(apell, "^VIUDA[ ]", "")
+replace apell = ustrregexra(apell, "^LOS[ ]", "")
+replace apell = "QUISPE" if apell == "QUIS PE"
+replace apell = "QUISPE" if apell == "QU ISPE"
+replace apell = "K'ACHA" in 20409
+replace apell = ustrregexra(apell, "[ ].$", "")
+replace apell = "ANCO" if apell == "AN CO"
+replace apell = "PUMA" if apell == "PU MA"
+
+save apellidos_clean.dta, replace
+
+gen viuda = ustrregexm(apellido, "VDA")
+replace viuda = 1 if ustrregexm(apellido, "VIUDA")
+
+gen leng = strlen(apellido)
+gen caso_1_letra = (leng == 1)
+drop leng
+
+save apellidos_clean.dta, replace
+
+
+//-------- Identificación de los casos y separar apellidos compuestos --------//
+
+drop apellido
+
+// dummys a pedido
+
+gen caso_2 = (strlen(apell) == 1)
+gen nom_dos_letras = (strlen(apell) == 2)
+
+// dummys para más de una palabra
+
+replace apell = trim(apell)
+replace apell = stritrim(apell)
+
+gen pre = ustrregexm(apell, "[ ]")
+sort pre
+
+
+
+// reconocer casos especiales de apellidos compuestos (dos palabras que forman un solo apellido)
+
+gen dos = ustrregexm(apell, "^DOS[ ]")
+gen mca1 = ustrregexm(apell, "^MC[ ]")
+gen mac1 = ustrregexm(apell, "^MAC[ ]")
+gen san = ustrregexm(apell, "^SAN[ ]")
+gen sta = ustrregexm(apell, "^STA[ ]")
+gen santa = ustrregexm(apell, "^SANTA[ ]")
+gen santo = ustrregexm(apell, "^SANTO[ ]")
+gen obrien = ustrregexm(apell, "^O'[ ]")
+gen delcarpio = ustrregexm(apell, "^DEL[ ]")
+
+egen zuma = rowtotal(dos mca1 mac1 san sta santa santo obrien delcarpio)
+
+// Separo aquellos casos de más de un apellido junto, sin considerar los casos especiales de arriba
+
+gen apecomp = (zuma != 1 & pre == 1)
+
+// genero dummys para origenes ingleses y croatas.
+
+gen origen_eng = ustrregexm(apell, "SON$")
+replace origen_eng = 1 if ustrregexm(apell, "TH") == 1
+gen origen_croata = ustrregexm(apell, "VICH$")
+
+
+save apellidos_unic.dta, replace
+
+// Ahora quiero separarlos para poder clasificarlos como si los apellidos compuestos fueran dos apellidos por separados, mantengo el id para juntarlos después
+
+keep if (zuma != 1 & pre == 1)
+
+keep id apell apecomp
+
+split apell, generate(parts)
+
+save apellidos_compuestos.dta, replace
+
+keep id parts1 apecomp
+rename parts1 apell
+drop if apell == ""
+
+save apecomp1.dta, replace
+
+use apellidos_compuestos.dta, clear
+
+keep id parts2 apecomp
+rename parts2 apell
+drop if apell == ""
+
+save apecomp2.dta, replace
+
+use apellidos_compuestos.dta, clear
+
+keep id parts3 apecomp
+rename parts3 apell
+drop if apell == ""
+
+save apecomp3.dta, replace
+
+use apecomp1, clear
+
+append using apecomp2 apecomp3
+save apecomp_def.dta, replace
+
+use apellidos_unic, clear
+
+drop pre dos mca1 mac1 san sta santa santo obrien delcarpio zuma
+
+append using apecomp_def.dta
+
+save apellidos_unic.dta, replace
+
+//--------------- Trabajando las bases de datos conseguidas --------------- //
+
+import excel "Base de datos-Final DRyA.xlsx", sheet("Indígenas") firstrow clear
+
+bys APELLIDO FUENTE: gen fuentes_ind = (_n == 1) 
+drop if fuentes_ind == 0
+
+collapse (sum) fuentes_ind, by(APELLIDO)
+
+save ind_bd.dta, replace
+
+import excel "Base de datos-Final DRyA.xlsx", sheet("Hispanos") firstrow clear
+
+bys APELLIDO FUENTE: gen fuentes_hisp = (_n == 1) 
+drop if fuentes_hisp == 0
+
+collapse (sum) fuentes_hisp, by(APELLIDO)
+
+save hisp_bd.dta, replace
+
+// Analizar los casos de apellidos iguales en ambas bases, y comparar repetición entre las distintas fuentes.
+
+merge 1:1 APELLIDO using ind_bd, keepusing(fuentes_ind) keep(3)
+drop _m
+
+gen origen_ind = (fuentes_ind > fuentes_hisp)
+replace origen_ind = . if fuentes_hisp == fuentes_ind
+
+save casos_empate.dta, replace
+
+// 134 casos resueltos, 768 casos de nombres repetidos entre ambas bases.
+
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//////////////////////////// EJECUTAR CÓDIGO R ////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// El código en R se encarga de clasificar el origen de los apellidos tomando en cuenta la similitud con los apellidos de las base de datos presentada y tomando la repetición entre fuentes como pesos para decidir en caso de empate.
+
+
+// --------------- Realizando tablas de indicadores --------------- //
+
+
+local bases 50 55 60 65 70 75 80
+
+foreach x in `bases' {
+	use "data_complete_`x'.dta", clear
+
+	merge 1:1 id using "apellidos_clean.dta", keepusing(viuda caso_1_letra apellido)
+	drop _m
+	order id apellido APELLIDO origen hisp_word index_hisp ind_word index_ind APELLIDO_1 origen_1 hisp_word_1 index_hisp_1 ind_word_1 index_ind_1 APELLIDO_2 origen_2 hisp_word_2 index_hisp_2 ind_word_2 index_ind_2 APELLIDO_3 origen_3 hisp_word_3 index_hisp_3 ind_word_3 index_ind_3
+	
+	save "data_complete_`x'", replace
+	
+	gen ind = (origen == 1 | origen_1 == 1 | origen_2 == 1 | origen_3 == 1)
+	gen hisp = (origen == 2 | origen_1 == 2 | origen_2 == 2 | origen_3 == 2)
+	egen tot = rowtotal(orig*)
+	gen clasificados = (tot > 0)	
+	gen same_index = (index_hisp == index_ind)
+	replace same_index = 1 if (index_hisp_1 == index_ind_1 & index_ind_1 != "0" & index_hisp_1 != "0")
+	replace same_index = 1 if (index_hisp_2 == index_ind_2 & index_ind_2 != "0" & index_hisp_2 != "0")
+	replace same_index = 1 if (index_hisp_3 == index_ind_3 & index_ind_3 != "0" & index_hisp_3 != "0")
+	
+	gen empate_no_clasi = (same_index == 1 & (origen == 0 | origen_1 == 0 | origen_2 == 0 | origen_3 == 0))
+	
+	gen bd = "bd_index_`x'"
+
+	keep bd ind hisp origen_eng origen_croata same_index empate_no_clasi clasificados
+	
+	save "data_resume_`x'", replace
+}
+
+local bases 55 60 65 70 75 80
+
+use "data_resume_50", clear
+
+foreach x in `bases' {
+
+append using "data_resume_`x'"
+
+}
+
+table bd, statistic(total ind hisp origen_eng origen_croata same_index empate_no_clasi clasificados)
+
+/* Código para generar las tablas del README, el formato se completa en un editor de texto.
+
+est clear
+
+estpost tabstat ind hisp origen_eng origen_croata same_index empate_no_clasi clasificados, by(bd) statistics(sum) nototal
+esttab using "clasificados_por_index.tex", replace ce(ind hisp origen_eng origen_croata same_index empate_no_clasi clasificados) nonumbers
+
+*/
+
+
+// ------------------ tablas de los apellidos ------------------ //
+
+use hisp_bd, clear
+
+merge 1:1 APELLIDO using ind_bd, keepusing(fuentes_ind)
+
+gen solo_hisp = (_m == 1)
+gen solo_ind = (_m == 2)
+gen ambas_bases = (_m ==3)
+drop _m 
+
+save apellidos_num_fuentes.dta, replace
+
+table, statistic(total solo_hisp solo_ind ambas_bases)
+
+/* Código para generar las tablas del README, el formato se completa en un editor de texto.
+
+est clear
+eststo only_hisp: estpost tab solo_hisp if solo_hisp==1
+eststo only_ind: estpost tab solo_ind if solo_ind==1
+eststo both: estpost tab ambas_bases if ambas_bases==1
+
+//esttab col0 col1 col2, unstack not nodepvars noobs nonote nonumbers
+estout only_hisp only_ind both using apellidos_cuant.tex, style(tex) replace
+
+*/
